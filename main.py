@@ -38,7 +38,7 @@ sqlChat = ChatGroq(
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 system = (
-    "You are a helpful furniture recommendation assistant. "
+    "You are a helpful IKEA furniture recommendation assistant. "
     "Your goal is to help users find the perfect furniture based on their needs and preferences. "
     "Engage in a conversational manner, keeping track of the user's queries and your responses within the current session. "
     "You can ask follow-up questions about their space, style preferences, budget, and specific needs to provide better recommendations. "
@@ -71,7 +71,8 @@ conn = sqlite3.connect('furniture.db')
 df.to_sql('furniture', conn, index=False, if_exists='replace')
 conn.close()
 
-conversation_history = []
+# Store conversation histories for different chats
+conversation_histories = {}
 
 def sanitize_metadata(metadata):
     """Recursively sanitize metadata by replacing invalid JSON values."""
@@ -87,25 +88,33 @@ def sanitize_metadata(metadata):
 
 @app.route('/api/chat', methods=['DELETE'])
 def reset_chat():
-    conversation_history.clear()
+    chat_id = request.args.get('chatId')
+    if chat_id in conversation_histories:
+        del conversation_histories[chat_id]
     return jsonify({'status': 'success'})
 
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
     data = request.get_json()
     user_input = data.get('message', '').strip()
+    chat_id = data.get('chatId', 'default')
+    
     if not user_input:
         return jsonify({'error': 'No message provided.'}), 400
 
     try:
-        is_follow_up = "follow-up" in user_input.lower() or (len(conversation_history) > 0 and not user_input.lower().startswith(('new', 'reset', 'start over')))
+        # Initialize conversation history for new chat
+        if chat_id not in conversation_histories:
+            conversation_histories[chat_id] = []
+
+        is_follow_up = "follow-up" in user_input.lower() or (len(conversation_histories[chat_id]) > 0 and not user_input.lower().startswith(('new', 'reset', 'start over')))
         session_context = ""
         enriched_user_input = user_input
 
         if is_follow_up:
             session_context = "\n".join(
                 f"User: {entry['query']}\nAssistant: {entry['response']}"
-                for entry in conversation_history[-6:]
+                for entry in conversation_histories[chat_id][-6:]
             )
             enriched_user_input = f"{session_context}\nUser: {user_input}"
 
@@ -142,7 +151,7 @@ def chat_endpoint():
             "results": formatted_results
         })
 
-        conversation_history.append({
+        conversation_histories[chat_id].append({
             "query": user_input,
             "response": response.content
         })
