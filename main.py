@@ -437,5 +437,54 @@ def analyze_moodboard():
     except Exception as e:
         return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
+@app.route('/api/furniture-categories', methods=['GET'])
+def get_furniture_categories():
+    try:
+        conn = sqlite3.connect('furniture.db')
+        cursor = conn.cursor()
+        
+        # Get unique categories
+        cursor.execute("SELECT DISTINCT category FROM furniture")
+        categories = [row[0] for row in cursor.fetchall()]
+        
+        return jsonify({'categories': categories})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/furniture-items/<category>', methods=['GET'])
+def get_furniture_items(category):
+    try:
+        conn = sqlite3.connect('furniture.db')
+        cursor = conn.cursor()
+        
+        # Get furniture items for the selected category that have all measurements
+        cursor.execute("""
+            SELECT name, width, height, depth, short_description 
+            FROM furniture 
+            WHERE category = ? 
+            AND width IS NOT NULL 
+            AND height IS NOT NULL 
+            AND depth IS NOT NULL
+        """, (category,))
+        
+        items = []
+        for row in cursor.fetchall():
+            name, width, height, depth, description = row
+            items.append({
+                'name': name,
+                'width': width,
+                'height': height,
+                'depth': depth,
+                'description': description
+            })
+        
+        return jsonify({'items': items})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)
