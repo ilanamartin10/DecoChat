@@ -12,6 +12,12 @@ from langchain_community.vectorstores import FAISS
 import sqlite3
 from inputSql import generate_sql_from_input
 import numpy as np
+from google.cloud import vision
+from openai import OpenAI
+import base64
+import io
+from PIL import Image
+import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -167,6 +173,114 @@ def chat_endpoint():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({'error': str(e)}), 500
+
+# Initialize Google Cloud Vision client
+vision_client = vision.ImageAnnotatorClient()
+
+# Initialize Groq client for furniture analysis
+furnitureChat = ChatGroq(
+    temperature=0.7,
+    groq_api_key=os.getenv("GROQ_API_KEY"),
+    model_name="llama-3.2-90b-vision-preview"
+)
+
+@app.route('/api/analyze-furniture', methods=['POST'])
+def analyze_furniture():
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({'error': 'No image data provided'}), 400
+            
+        print("Received image data, length:", len(data['image']))
+        
+        try:
+            image_data = base64.b64decode(data['image'])
+            print("Successfully decoded base64 image")
+        except Exception as e:
+            print(f"Error decoding base64: {str(e)}")
+            return jsonify({'error': 'Invalid image data'}), 400
+        
+        try:
+            # Create Vision API image
+            image = vision.Image(content=image_data)
+            print("Created Vision API image object")
+            
+            # Perform label detection
+            response = vision_client.label_detection(image=image)
+            labels = [label.description for label in response.label_annotations]
+            print("Detected labels:", labels)
+            
+            # Perform object detection
+            objects_response = vision_client.object_localization(image=image)
+            objects = [obj.name for obj in objects_response.localized_object_annotations]
+            print("Detected objects:", objects)
+            
+            # Combine labels and objects for better context
+            furniture_context = " ".join(set(labels + objects))
+            print("Combined context:", furniture_context)
+            
+        except Exception as e:
+            print(f"Error with Vision API: {str(e)}")
+            return jsonify({'error': f'Vision API error: {str(e)}'}), 500
+        
+        try:
+            # Generate care guide using Groq
+            prompt = f"""Based on the following furniture context: {furniture_context}
+
+Please provide a concise care guide with the following sections (keep each section to 1-2 sentences):
+
+1. Materials: Briefly identify the main materials
+2. Cleaning Tips: Provide 1-2 key cleaning instructions
+3. Maintenance Schedule: List 2-3 main maintenance tasks
+
+IMPORTANT: Your response MUST be a valid JSON object with EXACTLY these keys:
+{{
+    "materials": "brief materials description",
+    "cleaningTips": "1-2 key cleaning tips",
+    "maintenanceSchedule": "2-3 main maintenance tasks"
+}}
+
+Keep responses short and to the point. Do not include any additional text or formatting outside the JSON object."""
+
+            print("Sending request to Groq...")
+            response = furnitureChat.invoke(prompt)
+            print("Received response from Groq")
+            print("Raw response:", response.content)
+            
+            try:
+                # Try to clean the response if it's not pure JSON
+                content = response.content.strip()
+                if not content.startswith('{'):
+                    # Find the first { and last }
+                    start = content.find('{')
+                    end = content.rfind('}') + 1
+                    if start != -1 and end != 0:
+                        content = content[start:end]
+                
+                care_guide = json.loads(content)
+                print("Successfully parsed care guide")
+                
+                # Validate the required keys are present
+                required_keys = ['materials', 'cleaningTips', 'maintenanceSchedule']
+                if not all(key in care_guide for key in required_keys):
+                    raise ValueError("Missing required keys in response")
+                
+                return jsonify(care_guide)
+            except json.JSONDecodeError as e:
+                print(f"JSON parsing error: {str(e)}")
+                print("Raw content that failed to parse:", response.content)
+                return jsonify({'error': 'Failed to parse response from AI'}), 500
+            except ValueError as e:
+                print(f"Validation error: {str(e)}")
+                return jsonify({'error': str(e)}), 500
+            
+        except Exception as e:
+            print(f"Error with Groq: {str(e)}")
+            return jsonify({'error': f'Groq error: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)
