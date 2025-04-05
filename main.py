@@ -1,4 +1,3 @@
-# main.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -85,9 +84,7 @@ def sanitize_metadata(metadata):
     if isinstance(metadata, list):
         return [sanitize_metadata(item) for item in metadata]
     elif isinstance(metadata, dict):
-        return {
-            key: sanitize_metadata(value) for key, value in metadata.items()
-        }
+        return { key: sanitize_metadata(value) for key, value in metadata.items() }
     elif isinstance(metadata, (float, int)) and np.isnan(metadata):
         return None 
     return metadata
@@ -241,7 +238,6 @@ IMPORTANT: Your response MUST be a valid JSON object with EXACTLY these keys:
 }}
 
 Keep responses short and to the point. Do not include any additional text or formatting outside the JSON object."""
-
             print("Sending request to Groq...")
             response = furnitureChat.invoke(prompt)
             print("Received response from Groq")
@@ -367,7 +363,6 @@ def analyze_moodboard():
                 "categories": ["category1", "category2", "category3"]
             }}
             """
-
             response = chat.invoke(prompt)
             analysis = json.loads(response.content)
             print("Generated categories:", analysis['categories'])  # Debug log
@@ -376,6 +371,7 @@ def analyze_moodboard():
         
         # Get recommendations from IKEA database
         recommendations = []
+        seen_names = set()  # To avoid duplicate names
         try:
             # First, let's check what categories exist in the database
             cursor.execute("SELECT DISTINCT category FROM furniture")
@@ -407,7 +403,11 @@ def analyze_moodboard():
 
                 if result:
                     name, description, price, link = result
-
+                    # Only add recommendation if the name hasn't been added yet
+                    if name in seen_names:
+                        print(f"Duplicate found for {name}, skipping.")
+                        continue
+                    seen_names.add(name)
                     recommendations.append({
                         'name': name,
                         'description': f"{description} (Price: {price})",
@@ -470,8 +470,12 @@ def get_furniture_items(category):
         """, (category,))
         
         items = []
+        seen_names = set()  # Track names we've already added
         for row in cursor.fetchall():
             name, width, height, depth, description = row
+            if name in seen_names:
+                continue
+            seen_names.add(name)
             items.append({
                 'name': name,
                 'width': width,
