@@ -88,10 +88,10 @@ const Dashboard: React.FC = () => {
           <CardTitle>Chat Assistant</CardTitle>
           <CardDescription>Get personalized furniture recommendations and design advice through our AI chat interface</CardDescription>
         </Card>
-        <Card to="/moodboard">
+        <Card to="/room-analyzer">
           <CardIcon>🎨</CardIcon>
-          <CardTitle>Moodboard</CardTitle>
-          <CardDescription>Create and organize your design inspirations in one place</CardDescription>
+          <CardTitle>Room Analyzer</CardTitle>
+          <CardDescription>Upload a room photo to get personalized furniture recommendations and style analysis</CardDescription>
         </Card>
         <Card to="/care-guide">
           <CardIcon>📚</CardIcon>

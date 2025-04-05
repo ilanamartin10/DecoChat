@@ -282,5 +282,160 @@ Keep responses short and to the point. Do not include any additional text or for
         print(f"Unexpected error: {str(e)}")
         return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
+@app.route('/api/analyze-moodboard', methods=['POST'])
+def analyze_moodboard():
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image provided'}), 400
+        
+        image_file = request.files['image']
+        if not image_file.filename:
+            return jsonify({'error': 'No image selected'}), 400
+
+        # Ensure uploads directory exists
+        uploads_dir = 'uploads'
+        if not os.path.exists(uploads_dir):
+            os.makedirs(uploads_dir)
+
+        # Save the image temporarily
+        temp_path = os.path.join(uploads_dir, 'temp_moodboard.jpg')
+        try:
+            image_file.save(temp_path)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save image: {str(e)}'}), 500
+
+        # Initialize Google Vision API client
+        try:
+            client = vision.ImageAnnotatorClient()
+        except Exception as e:
+            return jsonify({'error': f'Failed to initialize Vision API client: {str(e)}'}), 500
+
+        # Read the image file
+        try:
+            with open(temp_path, 'rb') as image_file:
+                content = image_file.read()
+        except Exception as e:
+            return jsonify({'error': f'Failed to read image file: {str(e)}'}), 500
+
+        image = vision.Image(content=content)
+        
+        # Perform image analysis
+        try:
+            response = client.label_detection(image=image)
+            labels = [label.description for label in response.label_annotations]
+            
+            # Get image properties
+            response = client.image_properties(image=image)
+            colors = []
+            for color in response.image_properties_annotation.dominant_colors.colors:
+                colors.append({
+                    'red': color.color.red,
+                    'green': color.color.green,
+                    'blue': color.color.blue,
+                    'score': color.score
+                })
+        except Exception as e:
+            return jsonify({'error': f'Failed to analyze image: {str(e)}'}), 500
+
+        # Connect to IKEA database
+        try:
+            conn = sqlite3.connect('furniture.db')
+            cursor = conn.cursor()
+        except Exception as e:
+            return jsonify({'error': f'Failed to connect to database: {str(e)}'}), 500
+
+        # Generate room vibe description and furniture recommendations
+        try:
+            prompt = f"""
+            Based on the following image analysis:
+            - Labels: {', '.join(labels)}
+            - Dominant colors: {json.dumps(colors)}
+            
+            Please provide:
+            1. A brief description of the room's vibe and style
+            2. 3-5 furniture categories that would complement this space. 
+               IMPORTANT: Use ONLY these exact categories from our database:
+               - Bar furniture
+               - Beds
+               - Bookcases & shelving units
+               - Cabinets & cupboards
+               - Café furniture
+            
+            Format the response as a JSON object with the following structure:
+            {{
+                "vibe": "description of the room's vibe",
+                "categories": ["category1", "category2", "category3"]
+            }}
+            """
+
+            response = chat.invoke(prompt)
+            analysis = json.loads(response.content)
+            print("Generated categories:", analysis['categories'])  # Debug log
+        except Exception as e:
+            return jsonify({'error': f'Failed to generate recommendations: {str(e)}'}), 500
+        
+        # Get recommendations from IKEA database
+        recommendations = []
+        try:
+            # First, let's check what categories exist in the database
+            cursor.execute("SELECT DISTINCT category FROM furniture")
+            existing_categories = [row[0] for row in cursor.fetchall()]
+            print("Existing categories in DB:", existing_categories)  # Debug log
+
+            for category in analysis['categories']:
+                print(f"Searching for category: {category}")  # Debug log
+                # Try exact match first
+                cursor.execute("""
+                    SELECT name, short_description, price, link 
+                    FROM furniture 
+                    WHERE category = ?
+                    ORDER BY RANDOM() 
+                    LIMIT 1
+                """, (category,))
+                
+                result = cursor.fetchone()
+                if not result:
+                    # If no exact match, try partial match
+                    cursor.execute("""
+                        SELECT name, short_description, price, link 
+                        FROM furniture 
+                        WHERE category LIKE ?
+                        ORDER BY RANDOM() 
+                        LIMIT 1
+                    """, (f'%{category}%',))
+                    result = cursor.fetchone()
+
+                if result:
+                    name, description, price, link = result
+
+                    recommendations.append({
+                        'name': name,
+                        'description': f"{description} (Price: {price})",
+                        'link': link
+                    })
+                    print(f"Found match: {name} with link: {link}")  # Debug log
+                else:
+                    print(f"No match found for category: {category}")  # Debug log
+
+            print(f"Total recommendations found: {len(recommendations)}")  # Debug log
+        except Exception as e:
+            return jsonify({'error': f'Failed to query database: {str(e)}'}), 500
+
+        conn.close()
+
+        # Clean up temporary file
+        try:
+            os.remove(temp_path)
+        except:
+            pass  # Ignore cleanup errors
+
+        return jsonify({
+            'vibe': analysis['vibe'],
+            'recommendations': recommendations
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)
