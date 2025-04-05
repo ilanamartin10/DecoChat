@@ -209,6 +209,26 @@ const Button = styled.button`
   }
 `;
 
+const SpeakerButton = styled.button`
+  padding: 12px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover {
+    background: #0056b3;
+  }
+  &:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
 const formatMessage = (content: string) => {
   // Replace bullet points with proper HTML
   content = content.replace(/\n•/g, '\n• ');
@@ -229,8 +249,10 @@ const ChatInterface: React.FC = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     // Initialize speech recognition
@@ -257,9 +279,31 @@ const ChatInterface: React.FC = () => {
       recognitionRef.current = recognition;
     }
 
+    // Initialize speech synthesis
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance();
+      utterance.lang = 'en-US';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
+        setIsSpeaking(false);
+      };
+
+      utteranceRef.current = utterance;
+    }
+
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (utteranceRef.current) {
+        window.speechSynthesis.cancel();
       }
     };
   }, []);
@@ -295,6 +339,21 @@ const ChatInterface: React.FC = () => {
     setChats(prev => [...prev, newChat]);
     setActiveChatId(newChat.id);
     setInput('');
+  };
+
+  const speakText = (text: string) => {
+    if (utteranceRef.current && 'speechSynthesis' in window) {
+      utteranceRef.current.text = text;
+      window.speechSynthesis.speak(utteranceRef.current);
+      setIsSpeaking(true);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
   };
 
   const handleSend = async () => {
@@ -337,6 +396,9 @@ const ChatInterface: React.FC = () => {
           ? { ...chat, messages: [...chat.messages, assistantMessage] }
           : chat
       ));
+
+      // Speak the assistant's response
+      speakText(assistantMessage.content);
     } catch (error) {
       console.error('Error:', error);
       setChats(prev => prev.map(chat => 
@@ -391,9 +453,16 @@ const ChatInterface: React.FC = () => {
             <MessagesContainer>
               {activeChat.messages.map((message, index) => (
                 <Message key={index} role={message.role}>
-                  <MessageContent role={message.role}>
-                    {message.content}
-                  </MessageContent>
+                  <MessageContent role={message.role} dangerouslySetInnerHTML={{ __html: message.content }} />
+                  {message.role === 'assistant' && (
+                    <SpeakerButton
+                      onClick={isSpeaking ? stopSpeaking : () => speakText(message.content)}
+                      disabled={!('speechSynthesis' in window)}
+                      title={!('speechSynthesis' in window) ? 'Text-to-speech not supported in your browser' : ''}
+                    >
+                      {isSpeaking ? '🔇' : '🔊'}
+                    </SpeakerButton>
+                  )}
                 </Message>
               ))}
               <div ref={messagesEndRef} />
