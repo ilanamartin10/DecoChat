@@ -1,41 +1,25 @@
 import React from 'react';
-import styled from 'styled-components';
-import ChatInterface from './components/ChatInterface';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Dashboard from './components/Dashboard';
+import ChatPage from './components/pages/ChatPage';
+import MoodboardPage from './components/pages/MoodboardPage';
+import CareGuidePage from './components/pages/CareGuidePage';
+import PlanRoomPage from './components/pages/PlanRoomPage';
 
-const AppContainer = styled.div`
-  text-align: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: 100vh;
-`;
-
-const Header = styled.header`
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-  margin-bottom: 20px;
-`;
-
-const Title = styled.h1`
-  margin: 0;
-  font-size: 2em;
-`;
-
-const Subtitle = styled.p`
-  margin: 10px 0 0;
-  font-size: 1.2em;
-  opacity: 0.8;
-`;
-
-function App() {
+const App: React.FC = () => {
   return (
-    <AppContainer>
-      <Header>
-        <Title> Furniture Recommendation Chatbot</Title>
-        <Subtitle>Find your perfect furniture match with AI</Subtitle>
-      </Header>
-      <ChatInterface />
-    </AppContainer>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Dashboard />}>
+          <Route index element={<Navigate to="/chat" replace />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="moodboard" element={<MoodboardPage />} />
+          <Route path="care-guide" element={<CareGuidePage />} />
+          <Route path="plan-room" element={<PlanRoomPage />} />
+        </Route>
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;
