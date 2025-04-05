@@ -1,6 +1,51 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 
+// Declare global types for the Web Speech API
+declare global {
+  interface Window {
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
+// Add type definitions for the Web Speech API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionError) => any) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionError extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -127,6 +172,26 @@ const Input = styled.input`
   }
 `;
 
+const MicButton = styled.button<{ isListening: boolean }>`
+  padding: 12px;
+  background: ${props => props.isListening ? '#ff4444' : '#007bff'};
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover {
+    background: ${props => props.isListening ? '#cc0000' : '#0056b3'};
+  }
+  &:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
 const Button = styled.button`
   padding: 12px 24px;
   background: #007bff;
@@ -153,7 +218,7 @@ const formatMessage = (content: string) => {
   content = content.replace(/\n\n/g, '\n\n');
   
   // Format numbered lists
-  content = content.replace(/\n\d+\./g, match => `\n${match}`);
+  content = content.replace(/\n(\d+)\./g, (match: string, number: string) => `\n${number}.`);
   
   return content;
 };
@@ -163,7 +228,55 @@ const ChatInterface: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Initialize speech recognition
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: SpeechRecognitionError) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const startListening = () => {
+    if (recognitionRef.current && !isListening) {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -294,6 +407,14 @@ const ChatInterface: React.FC = () => {
                 placeholder="Type your message..."
                 disabled={isLoading}
               />
+              <MicButton
+                isListening={isListening}
+                onClick={isListening ? stopListening : startListening}
+                disabled={!('webkitSpeechRecognition' in window)}
+                title={!('webkitSpeechRecognition' in window) ? 'Speech recognition not supported in your browser' : ''}
+              >
+                {isListening ? '🎤' : '🎤'}
+              </MicButton>
               <Button onClick={handleSend} disabled={isLoading || !input.trim()}>
                 {isLoading ? 'Sending...' : 'Send'}
               </Button>
@@ -301,7 +422,7 @@ const ChatInterface: React.FC = () => {
           </>
         ) : (
           <div style={{ textAlign: 'center', padding: '20px' }}>
-            <h2>Welcome to IKEA Furniture Chatbot</h2>
+            <h2>Welcome to DecoChat Chatbot</h2>
             <p>Start a new chat to begin your furniture search!</p>
           </div>
         )}
