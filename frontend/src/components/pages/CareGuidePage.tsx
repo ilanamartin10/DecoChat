@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import BackButton from '../BackButton';
 
+const API_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
 const PageContainer = styled.div`
   padding: 20px;
   max-width: 1200px;
@@ -131,7 +133,7 @@ const CareGuidePage: React.FC = () => {
         
         try {
           // Send to backend for processing
-          const response = await fetch('http://localhost:8000/api/analyze-furniture', {
+          const response = await fetch(`${API_URL}/api/analyze-furniture`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

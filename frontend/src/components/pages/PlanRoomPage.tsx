@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import BackButton from '../BackButton';
 
+const API_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
 const PageContainer = styled.div`
   padding: 20px;
   max-width: 1200px;
@@ -173,7 +175,7 @@ const PlanRoomPage: React.FC = () => {
 
   useEffect(() => {
     // Fetch categories when component mounts
-    fetch('http://localhost:8000/api/furniture-categories')
+    fetch(`${API_URL}/api/furniture-categories`)
       .then(response => response.json())
       .then(data => {
         if (data.categories) {
@@ -186,7 +188,7 @@ const PlanRoomPage: React.FC = () => {
   useEffect(() => {
     // Fetch furniture items when category changes
     if (selectedCategory) {
-      fetch(`http://localhost:8000/api/furniture-items/${encodeURIComponent(selectedCategory)}`)
+      fetch(`${API_URL}/api/furniture-items/${encodeURIComponent(selectedCategory)}`)
         .then(response => response.json())
         .then(data => {
           if (data.items) {
