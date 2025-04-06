@@ -172,7 +172,7 @@ def chat_endpoint():
         return jsonify({'error': str(e)}), 500
 
 # Initialize Google Cloud Vision client
-vision_client = vision.ImageAnnotatorClient()
+# vision_client = vision.ImageAnnotatorClient()
 creds_b64 = os.getenv("GOOGLE_CREDENTIALS")
 creds_json = base64.b64decode(creds_b64).decode("utf-8")
 creds_info = json.loads(creds_json)
