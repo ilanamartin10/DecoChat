@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 
-const API_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 // Declare global types for the Web Speech API
 declare global {

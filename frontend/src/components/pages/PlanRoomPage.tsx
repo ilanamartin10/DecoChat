@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import BackButton from '../BackButton';
 
-const API_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 const PageContainer = styled.div`
   padding: 20px;
