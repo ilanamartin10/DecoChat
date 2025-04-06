@@ -173,6 +173,15 @@ def chat_endpoint():
 
 # Initialize Google Cloud Vision client
 vision_client = vision.ImageAnnotatorClient()
+creds_b64 = os.getenv("GOOGLE_CREDENTIALS")
+creds_json = base64.b64decode(creds_b64).decode("utf-8")
+creds_info = json.loads(creds_json)
+
+# Use it to initialize the Vision API client
+from google.oauth2 import service_account
+
+credentials = service_account.Credentials.from_service_account_info(creds_info)
+vision_client = vision.ImageAnnotatorClient(credentials=credentials)
 
 # Initialize Groq client for furniture analysis
 furnitureChat = ChatGroq(
