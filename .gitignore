@@ -47,3 +47,6 @@ faiss_furniture_index/
 # OS
 .DS_Store
 Thumbs.db 
+
+google*.json
+encoded.txt
